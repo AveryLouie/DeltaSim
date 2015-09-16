@@ -231,15 +231,10 @@ class Delta:
 			myDelta.update_slider(pos[0],pos[1],pos[2],'abs')
 		self.motion_buf=[]
 
-	def load_motion_buffer
-
-
-
-
-#draw the spheres for now
-#Asphere = sphere(pos = sliderA, radius= arm_length, opacity = .1)
-#Bsphere = sphere(pos = sliderB, radius= arm_length, opacity = .1)
-#Csphere = sphere(pos = sliderC, radius= arm_length, opacity = .1)
+		#load a motion buffer into the machines motion buffer
+	def load_motion_buffer(self,buf):
+		self.motion_buf=buf
+		return True
 
 myDelta = Delta(200, 600, 250, scene)
 myDelta.setup_delta()
