@@ -18,7 +18,9 @@ class Delta:
 
 		#
 		scene.title="delta simulator 9000"
-		scene.center=(0,0,self.height/2.0)
+		scene.center=(0,0,self.height*.5)
+		scene.forward=(-1,0,0)
+		scene.up     =(0,0,1)
 
 	#Trilateration based on https://en.wikipedia.org/wiki/Trilateration
 	#step 1 change to coordinate system w spheres all in one plane
@@ -62,29 +64,29 @@ class Delta:
 		self.armC = cylinder(radius = self.radius * .01, color = color.orange)
 
 		#should clean this up
-		self.pylonA.x     = cos(radians(0))*self.radius
-		self.pylonA.y     = sin(radians(0))*self.radius
-		self.pylonA.point = vector (0,0,self.height)
+		self.pylonA.x     = cos(radians(120))*self.radius
+		self.pylonA.y     = sin(radians(120))*self.radius
+		self.pylonA.point = vector (0,self.height,0)
 
-		self.pylonB.x     = cos(radians(120))*self.radius
-		self.pylonB.y     = sin(radians(120))*self.radius
-		self.pylonB.point = vector (0,0,self.height)
+		self.pylonB.x     = cos(radians(220))*self.radius
+		self.pylonB.y     = sin(radians(220))*self.radius
+		self.pylonB.point = vector (0,self.height,0)
 
-		self.pylonC.x     = cos(radians(240))*self.radius
-		self.pylonC.y     = sin(radians(240))*self.radius
-		self.pylonC.point = vector (0,0,self.height)
+		self.pylonC.x     = cos(radians(300))*self.radius
+		self.pylonC.y     = sin(radians(300))*self.radius
+		self.pylonC.point = vector (0,self.height,0)
 
 		#actually assign these to the pylons
 
-		self.pylonA.pos    = vector (self.pylonA.x,self.pylonA.y,0)
+		self.pylonA.pos    = vector (self.pylonA.x,self.pylonA.y,100)
 		self.pylonA.axis   = self.pylonA.point
 		self.pylonA.radius = self.radius*.1
 
-		self.pylonB.pos    = vector (self.pylonB.x,self.pylonB.y,0)
+		self.pylonB.pos    = vector (self.pylonB.x,self.pylonB.y,100)
 		self.pylonB.axis   = self.pylonB.point
 		self.pylonB.radius = self.radius*.1
 
-		self.pylonC.pos    = vector (self.pylonC.x,self.pylonC.y,0)
+		self.pylonC.pos    = vector (self.pylonC.x,self.pylonC.y,100)
 		self.pylonC.axis   = self.pylonC.point
 		self.pylonC.radius = self.radius*.1
 
@@ -228,6 +230,8 @@ class Delta:
 			rate(100)
 			myDelta.update_slider(pos[0],pos[1],pos[2],'abs')
 		self.motion_buf=[]
+
+	def load_motion_buffer
 
 
 
