@@ -154,14 +154,30 @@ class Delta:
 	#get desired slider-on-pylon position for x y z coords
 	def rev_kinematic(self, R, r1, r2, r3):
 		#R, the desired point
-		s1=self.solve_sphere_line_intersect(R,r1,self.pylonA.pos,self.pylonA.axis)
-		s2=self.solve_sphere_line_intersect(R,r2,self.pylonB.pos,self.pylonB.axis)
-		s3=self.solve_sphere_line_intersect(R,r3,self.pylonC.pos,self.pylonC.axis)
+		s1 = self.solve_sphere_line_intersect(R,r1,self.pylonA.pos,self.pylonA.axis)
+		s2 = self.solve_sphere_line_intersect(R,r2,self.pylonB.pos,self.pylonB.axis)
+		s3 = self.solve_sphere_line_intersect(R,r3,self.pylonC.pos,self.pylonC.axis)
+
+		s1 = self.point_line_scalar(s1, self.pylonA.pos, self.pylonA.axis)
+		s2 = self.point_line_scalar(s2, self.pylonB.pos, self.pylonB.axis)
+		s3 = self.point_line_scalar(s3, self.pylonC.pos, self.pylonC.axis)
+
+
 		return [s1,s2,s3]
 
 	#find intersection of circle and a line.
 	#circle given in x,y,z,r
 	#line given in point-vector form (but not neccecarily unit vector)
+
+
+	#given a vector that is pointing at a point, a point on a line and the unit vector for the line,
+	#what value t for line(t)=linepoint+t*norm(lineaxis) gives you the intersection?
+	def point_line_scalar(self, point, linepoint, lineaxis):
+		ret=mag(point-linepoint)#/mag(norm(lineaxis))==1
+		return ret
+
+
+
 	def solve_sphere_line_intersect(this,R,r,P,pvec):
 		yhat=norm(pvec)
 		xhat=norm(cross(cross(R-P,pvec),pvec))
@@ -176,7 +192,9 @@ class Delta:
 
 		theta = acos(d/r)
 		#note,there is more than one solution.  I only return one because I assume the arms are going "down"
+		#this is the solution if you want a vector pointed at the place in space where the arm is
 		solution = R+ r*cos(theta)*xhat +r*sin(theta)*yhat
+
 		return solution
 
 	def endpoint_trail(self):
@@ -190,8 +208,7 @@ class Delta:
 		Mhat=norm(A-B) #this is the motion vector
 
 		#largest_seg is the largest segment length that evenly divides the total distance that is smaller than self.seg
-		print self.seg
-		print mag(A-B)
+		
 		largest_seg = mag(A-B)/ceil(mag(A-B)/self.seg)
 		print("seg len is %d" % (largest_seg))
 
@@ -202,8 +219,15 @@ class Delta:
 		
 	def xyz_to_abc(self):
 		for xyz in self.plan_buf:
+			print self.rev_kinematic(xyz,self.arm['a'],self.arm['b'],self.arm['c'])
 			self.motion_buf.append(self.rev_kinematic(xyz,self.arm['a'],self.arm['b'],self.arm['c']))
 		self.plan_buf=[] #forget what was in this buffer
+
+	def run_out_motion_buffer(self):
+		for pos in self.motion_buf:
+			rate(100)
+			myDelta.update_slider(pos[0],pos[1],pos[2],'abs')
+		self.motion_buf=[]
 
 
 
@@ -220,14 +244,17 @@ myDelta.update_slider(500,500,500,'abs')
 myDelta.endpoint_trail()
 
 myDelta.plan_G0(vector(0,0,0))
-# print(myDelta.plan_buf)
-print(myDelta.motion_buf)
 myDelta.xyz_to_abc()
-# print(myDelta.motion_buf)
-
-
-
-
-for pos in myDelta.motion_buf:
-	rate(10)
-	myDelta.update_slider(pos[0],pos[1],pos[2],'abs')
+myDelta.run_out_motion_buffer()
+myDelta.plan_G0(vector(-20,-20,0))
+myDelta.xyz_to_abc()
+myDelta.run_out_motion_buffer()
+myDelta.plan_G0(vector(-20,20,0))
+myDelta.xyz_to_abc()
+myDelta.run_out_motion_buffer()
+myDelta.plan_G0(vector(20,-20,0))
+myDelta.xyz_to_abc()
+myDelta.run_out_motion_buffer()
+myDelta.plan_G0(vector(20,20,0))
+myDelta.xyz_to_abc()
+myDelta.run_out_motion_buffer()
