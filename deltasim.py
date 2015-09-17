@@ -6,9 +6,19 @@ from math import cos, sin, pi, radians, sqrt, acos, ceil
 #for now this is a delta that is simple and equilateral
 class Delta:
 
-	def __init__(self,radius,height,arm_length,scene):
+	def __init__(self,scene,radius=200,height=600,arm_length=250, angleA = 0, angleB = 120, angleC=240, pylonA_dir=vector(0,0,600),pylonB_dir=vector(0,0,600),pylonC_dir=vector(0,0,600)):
 		self.radius = radius
 		self.height = height
+		
+		self.angleA = angleA
+		self.angleB = angleB
+		self.angleC = angleC
+
+		self.pylonA_dir = pylonA_dir
+		self.pylonB_dir = pylonB_dir
+		self.pylonC_dir = pylonC_dir
+
+
 		self.seg    = 1.0 #max segment length for interpolation
 		self.plan_buf = [] #the buffer that holds xyz interp points
 		self.motion_buf = [] #the buffer that holds abc interp points
@@ -64,36 +74,35 @@ class Delta:
 		self.armC = cylinder(radius = self.radius * .01, color = color.orange)
 
 		#should clean this up
-		self.pylonA.x     = cos(radians(120))*self.radius
-		self.pylonA.y     = sin(radians(120))*self.radius
-		self.pylonA.point = vector (0,self.height,0)
+		self.pylonA.x     = cos(radians(self.angleA))*self.radius
+		self.pylonA.y     = sin(radians(self.angleA))*self.radius
+		self.pylonA.point = self.pylonA_dir
 
-		self.pylonB.x     = cos(radians(220))*self.radius
-		self.pylonB.y     = sin(radians(220))*self.radius
-		self.pylonB.point = vector (0,self.height,0)
+		self.pylonB.x     = cos(radians(self.angleB))*self.radius
+		self.pylonB.y     = sin(radians(self.angleB))*self.radius
+		self.pylonB.point = self.pylonB_dir
 
-		self.pylonC.x     = cos(radians(300))*self.radius
-		self.pylonC.y     = sin(radians(300))*self.radius
-		self.pylonC.point = vector (0,self.height,0)
+		self.pylonC.x     = cos(radians(self.angleC))*self.radius
+		self.pylonC.y     = sin(radians(self.angleC))*self.radius
+		self.pylonC.point = self.pylonC_dir
 
 		#actually assign these to the pylons
 
-		self.pylonA.pos    = vector (self.pylonA.x,self.pylonA.y,100)
+		self.pylonA.pos    = vector (self.pylonA.x,self.pylonA.y,0)
 		self.pylonA.axis   = self.pylonA.point
 		self.pylonA.radius = self.radius*.1
 
-		self.pylonB.pos    = vector (self.pylonB.x,self.pylonB.y,100)
+		self.pylonB.pos    = vector (self.pylonB.x,self.pylonB.y,0)
 		self.pylonB.axis   = self.pylonB.point
 		self.pylonB.radius = self.radius*.1
 
-		self.pylonC.pos    = vector (self.pylonC.x,self.pylonC.y,100)
+		self.pylonC.pos    = vector (self.pylonC.x,self.pylonC.y,0)
 		self.pylonC.axis   = self.pylonC.point
 		self.pylonC.radius = self.radius*.1
 
 
 		#need to set make_trail true so that the object gets a trail interval object, otherwise it is broken later
-		self.endpoint =  sphere(pos = self.origin, radius = self.radius*.05, color = color.green, make_trail = True)	
-		self.endpoint.make_trail = False #make trail invisible
+		self.endpoint =  sphere(pos = self.origin, radius = self.radius*.05, color = color.green, make_trail = False, trail_type='points')	
 
 	#tries to update slider position, checks to make sure there is a solution
 	#if there is no solution it returns False, else returns the solution based on solve_sphere_intersect
@@ -178,8 +187,6 @@ class Delta:
 		ret=mag(point-linepoint)#/mag(norm(lineaxis))==1
 		return ret
 
-
-
 	def solve_sphere_line_intersect(this,R,r,P,pvec):
 		yhat=norm(pvec)
 		xhat=norm(cross(cross(R-P,pvec),pvec))
@@ -199,9 +206,9 @@ class Delta:
 
 		return solution
 
-	def endpoint_trail(self):
-		self.endpoint.make_trail = True
-		self.endpoint.trail_type = "points"
+	def endpoint_trail(self, state=True, col=color.orange):
+		self.endpoint.make_trail = state
+		self.endpoint.trail_object.color=col
 
 	#you give plan_G0 B, as in from point A to B
 	#puts these points in self.plan_buf
@@ -227,8 +234,8 @@ class Delta:
 
 	def run_out_motion_buffer(self):
 		for pos in self.motion_buf:
-			rate(100)
-			myDelta.update_slider(pos[0],pos[1],pos[2],'abs')
+			rate(50)
+			self.update_slider(pos[0],pos[1],pos[2],'abs')
 		self.motion_buf=[]
 
 		#load a motion buffer into the machines motion buffer
@@ -236,24 +243,43 @@ class Delta:
 		self.motion_buf=buf
 		return True
 
-myDelta = Delta(200, 600, 250, scene)
-myDelta.setup_delta()
-myDelta.arm_len_set(400, 400, 400)
-myDelta.update_slider(500,500,500,'abs')
-myDelta.endpoint_trail()
+myDelta = Delta(scene)
+badDelta = Delta(scene, angleA=2, pylonA_dir=vector(-10,10,600))#pylonA_dir=vector(100,100,600))
 
-myDelta.plan_G0(vector(0,0,0))
-myDelta.xyz_to_abc()
-myDelta.run_out_motion_buffer()
-myDelta.plan_G0(vector(-50,-50,0))
-myDelta.xyz_to_abc()
-myDelta.run_out_motion_buffer()
-myDelta.plan_G0(vector(-50,50,0))
-myDelta.xyz_to_abc()
-myDelta.run_out_motion_buffer()
+
+myDelta.setup_delta()
+badDelta.setup_delta()
+
+
+myDelta.arm_len_set(300, 300, 300)
+badDelta.arm_len_set(300, 300, 300)
+
+myDelta.update_slider(600,600,600,'abs')
+badDelta.update_slider(600,600,600,'abs')
+
 myDelta.plan_G0(vector(50,50,0))
 myDelta.xyz_to_abc()
+
+badDelta.load_motion_buffer(myDelta.motion_buf)
+
+myDelta.endpoint_trail()
+badDelta.endpoint_trail(col=color.green)
+
 myDelta.run_out_motion_buffer()
-myDelta.plan_G0(vector(50,-50,0))
-myDelta.xyz_to_abc()
-myDelta.run_out_motion_buffer()
+badDelta.run_out_motion_buffer()
+
+# myDelta.plan_G0(vector(-50,-50,0))
+# myDelta.xyz_to_abc()
+# myDelta.run_out_motion_buffer()
+# myDelta.plan_G0(vector(-50,50,0))
+# myDelta.xyz_to_abc()
+
+# myDelta.endpoint_trail(True)
+
+# myDelta.run_out_motion_buffer()
+# myDelta.plan_G0(vector(50,50,0))
+# myDelta.xyz_to_abc()
+# myDelta.run_out_motion_buffer()
+# myDelta.plan_G0(vector(50,-50,0))
+# myDelta.xyz_to_abc()
+# myDelta.run_out_motion_buffer()
