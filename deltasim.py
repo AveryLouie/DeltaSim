@@ -234,7 +234,7 @@ class Delta:
 
 	def run_out_motion_buffer(self):
 		for pos in self.motion_buf:
-			rate(50)
+			rate(100)
 			self.update_slider(pos[0],pos[1],pos[2],'abs')
 		self.motion_buf=[]
 
@@ -243,16 +243,23 @@ class Delta:
 		self.motion_buf=buf
 		return True
 
+	def col_visible(self, state=True):
+		self.pylonA.visible=state
+		self.pylonB.visible=state
+		self.pylonC.visible=state
+
 myDelta = Delta(scene)
-badDelta = Delta(scene, angleA=2, pylonA_dir=vector(-10,10,600))#pylonA_dir=vector(100,100,600))
+badDelta = Delta(scene, pylonA_dir=vector(-10,0,600), pylonB_dir=vector(5,5,600))#pylonA_dir=vector(100,100,600))
 
 
 myDelta.setup_delta()
 badDelta.setup_delta()
 
+myDelta.col_visible(False)
+badDelta.col_visible(False)
 
 myDelta.arm_len_set(300, 300, 300)
-badDelta.arm_len_set(300, 300, 300)
+badDelta.arm_len_set(310, 290, 300)
 
 myDelta.update_slider(600,600,600,'abs')
 badDelta.update_slider(600,600,600,'abs')
