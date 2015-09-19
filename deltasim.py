@@ -2,291 +2,204 @@
 
 from visual import *
 from math import cos, sin, pi, radians, sqrt, acos, ceil
+import geometry as geo
 
 #for now this is a delta that is simple and equilateral
 class Delta:
 
-	def __init__(self,scene,radius=200,height=600,arm_length=250, angleA = 0, angleB = 120, angleC=240, pylonA_dir=vector(0,0,600),pylonB_dir=vector(0,0,600),pylonC_dir=vector(0,0,600)):
-		self.radius = radius
-		self.height = height
+	def __init__(self, scene, abase, bbase, cbase, adir, bdir, cdir, apos, bpos, cpos, alen, blen, clen, radius):
+		self.scene = scene
+		self.axes=['a','b','c']
+		self.bases=   {'a':abase , 'b':bbase , 'c':cbase}
+		self.dirs =   {'a':adir  , 'b':bdir  , 'c':cdir}
+		self.tpos =   {'a':apos  , 'b':bpos  , 'c':cpos}
+		self.armlen = {'a':alen  , 'b':blen  , 'c':clen}
+
+		#creates self.towers, a dict that contains the tower objects
+		self.tower_setup(self.bases, self.dirs, radius)
+		#creates self.endpoint, which /is/ the endpoint object (not a dict)
+		self.endpoint_setup(radius)
+		#creates self.arm which is a dict that contains the arm objects
+		self.arm_setup(radius)
+		# self.visible()
+		self.focus_delta()
+
+		#plan_buf holds xyz positions, motion_buf holds abc positions
+		self.plan_buf=[]
+		self.motion_buf=[]
+
+	#-----------------------------------SETUP FUNCTIONS------------------------------------------
+	#sets up the delta.
+
+	#creates an endpoint based on the tower positions.
+	def endpoint_setup(self, rad):
+		endpointpos = geo.get_sphere_intersect(self.vect_to_slider('a'), self.vect_to_slider('b'), self.vect_to_slider('c'),self.armlen['a'],self.armlen['b'],self.armlen['c'])
+		self.endpoint = sphere (pos=endpointpos[0], radius = rad*.05)
+
+	#cretes a dict of the tower cylinder objects
+	def tower_setup(self, bases, dirs, rad):
+		self.towers={}
+		for axis in self.axes:
+			self.towers[axis] = cylinder(pos=bases[axis], axis=dirs[axis], radius= rad*.1)
+		return True
+	
+	#creates a dict of the arm cylinder objects
+	def arm_setup(self, rad):
+		self.arm={}
+		for axis in self.axes:
+			self.arm[axis] = cylinder(pos = self.vect_to_slider(axis), axis= self.endpoint.pos-self.vect_to_slider(axis), radius = rad*.01)
+
+	#-----------------------------------KINEMATIC FUNCTIONS------------------------------------------
+	#main delta kinematic functions are here
+
+	#gives the vector that points from origin to the position of the slider along the tower
+	#this uses the tpos tower positions- not any arbitrary positions
+	def vect_to_slider(self, tower):
+		return pos_to_vect(self, tower, self.tpos[tower])
+
+	#changes from tower position to a vector the the tower position
+	def pos_to_vect(self,tower,pos):
+		return self.tower[tower].pos+pos*norm(self.towers[tower].axis)
+
+	#rev kinematic takes a desired endpoint position and returns the tower positions that result in that endpoint 
+	def rev_kinematic(self, R):
+		#R, the desired point
+		s={}
+		for axis in axes:
+			s[axis] = geo.get_sphere_line_intersect(R,self.armlen[axis],self.tower[axis].pos,self.tower[axis].axis)
+
+		for axis in axes:
+			s[axis] = geo.get_line_scalar(s[axis], self.tower[axis].pos, self.tower[axis].axis)
+
+		# s1 = geo.solve_sphere_line_intersect(R,self.armlen,self.pylonA.pos,self.pylonA.axis)
+		# s2 = geo.solve_sphere_line_intersect(R,r2,self.pylonB.pos,self.pylonB.axis)
+		# s3 = geo.solve_sphere_line_intersect(R,r3,self.pylonC.pos,self.pylonC.axis)
+
+		# s1 = self.point_line_scalar(s1, self.pylonA.pos, self.pylonA.axis)
+		# s2 = self.point_line_scalar(s2, self.pylonB.pos, self.pylonB.axis)
+		# s3 = self.point_line_scalar(s3, self.pylonC.pos, self.pylonC.axis)
+
+		return s
+
+		#takes s, a dict of delta positions s={'a':posa,'b':posb,'c':posc}
+		#tries out the positions, then if they are valid, changes the self.tpos and self.arm values
+		#to reflect upated positions
+	def update_slider(self, s, mode):
+		newpos={}
+
+		#relative mode, add the new slider movement to the old slider position
+		if mode=='rel':
+			for axis in axes:
+				newpos[axis]+=s[axis]+self.tpos[axis]
+
+		#absolute mode, set the new slider position to whatever we got sent in s
+		elif mode=='abs':
+			for axis in axes:
+				newpos[axis]=s[axis]
 		
-		self.angleA = angleA
-		self.angleB = angleB
-		self.angleC = angleC
-
-		self.pylonA_dir = pylonA_dir
-		self.pylonB_dir = pylonB_dir
-		self.pylonC_dir = pylonC_dir
-
-
-		self.seg    = 1.0 #max segment length for interpolation
-		self.plan_buf = [] #the buffer that holds xyz interp points
-		self.motion_buf = [] #the buffer that holds abc interp points
-		self.slider={'a' : 0, 'b' : 0, 'c' : 0} # the position of the slider along the pylon
-		self.arm={'a': arm_length,'b': arm_length, 'c': arm_length}
-		self.origin = vector (0,0,0)
-
-		#
-		scene.title="delta simulator 9000"
-		scene.center=(0,0,self.height*.5)
-		scene.forward=(-1,0,0)
-		scene.up     =(0,0,1)
-
-	#Trilateration based on https://en.wikipedia.org/wiki/Trilateration
-	#step 1 change to coordinate system w spheres all in one plane
-	#step 2 find solution to sphere intersect in new CS
-	#step 3 use unit vectors from step 1 to transform to solution in original
-	def solve_sphere_intersect(self, P1, P2, P3, r1, r2, r3 ):
-		#step 1, create a coordinate system around S1 = (0,0,0), taking the vector from center S1->S2 to be one axis
-		ehatx = ( P2 - P1 )/ mag(P2 - P1)
-		i     = dot(ehatx, (P3-P1))
-		ehaty = (P3 - P1 - i * ehatx)/mag(P3-P1-i*ehatx)
-		ehatz = cross(ehatx, ehaty)
-		d = mag(P2-P1)
-		j = dot( ehaty, (P3-P1))
-		#NB: the following x y z are only true iff the radius of all spheres is the same
-		x = (r1**2 - r2**2 + d**2)/(2.0*d)
-		y = ((r1**2 - r3**2 + i**2 + j**2) / (2.0 * j)) - (i * x / j)
-
-		try:
-			z = - sqrt ( r1**2 - x**2 - y**2 )
-		except ValueError:
-			print ("position not reachable! Spheres do not intersect.")
-			return False
-
-		res = P1 + x*ehatx + y* ehaty + z*ehatz #there is another solution, where you use +z
-		#print(res)
-		return res
-
-	#draws the delta for the first time and sets things up
-	def setup_delta(self):
-		#delta frame stuff
-		self.base = cylinder(pos = self.origin, axis=(0,0,-1), radius = self.radius, color = color.orange, opacity = .2)
-		
-		#we dont assign these just yet- it is neater to do it seperately, but handy to have the cylinder object to store stuff in 
-		self.pylonA = cylinder(pos = self.origin, axis = (0,0,0), radius = 0, color = color.orange)
-		self.pylonB = cylinder(pos = self.origin, axis = (0,0,0), radius = 0, color = color.orange)
-		self.pylonC = cylinder(pos = self.origin, axis = (0,0,0), radius = 0, color = color.orange)
-
-		#ignore where these are initially
-		self.armA = cylinder(radius = self.radius * .01, color = color.orange)
-		self.armB = cylinder(radius = self.radius * .01, color = color.orange)
-		self.armC = cylinder(radius = self.radius * .01, color = color.orange)
-
-		#should clean this up
-		self.pylonA.x     = cos(radians(self.angleA))*self.radius
-		self.pylonA.y     = sin(radians(self.angleA))*self.radius
-		self.pylonA.point = self.pylonA_dir
-
-		self.pylonB.x     = cos(radians(self.angleB))*self.radius
-		self.pylonB.y     = sin(radians(self.angleB))*self.radius
-		self.pylonB.point = self.pylonB_dir
-
-		self.pylonC.x     = cos(radians(self.angleC))*self.radius
-		self.pylonC.y     = sin(radians(self.angleC))*self.radius
-		self.pylonC.point = self.pylonC_dir
-
-		#actually assign these to the pylons
-
-		self.pylonA.pos    = vector (self.pylonA.x,self.pylonA.y,0)
-		self.pylonA.axis   = self.pylonA.point
-		self.pylonA.radius = self.radius*.1
-
-		self.pylonB.pos    = vector (self.pylonB.x,self.pylonB.y,0)
-		self.pylonB.axis   = self.pylonB.point
-		self.pylonB.radius = self.radius*.1
-
-		self.pylonC.pos    = vector (self.pylonC.x,self.pylonC.y,0)
-		self.pylonC.axis   = self.pylonC.point
-		self.pylonC.radius = self.radius*.1
-
-
-		#need to set make_trail true so that the object gets a trail interval object, otherwise it is broken later
-		self.endpoint =  sphere(pos = self.origin, radius = self.radius*.05, color = color.green, make_trail = False, trail_type='points')	
-
-	#tries to update slider position, checks to make sure there is a solution
-	#if there is no solution it returns False, else returns the solution based on solve_sphere_intersect
-	def update_slider(self, a, b, c, mode):
-		#get the position in space based on the position along the pylon.
-		#if the pylon is not vertical, this is not neccecarily
-		if (mode=='rel'):
-			newa=self.slider['a']+a
-			newb=self.slider['b']+b
-			newc=self.slider['c']+c
-		elif (mode=='abs'):
-			newa=a
-			newb=b
-			newc=c
 		else:
 			print("valid modes for update_slider are 'rel' and 'abs'")
 
 		#get the slider positions.  The movements are for the position of the slider /along the axis/ of the delta,
 		#which may be at an angle or in a weird spot
 
-		slider1 = self.pylonA.pos + newa * norm(self.pylonA.axis)
-		slider2 = self.pylonB.pos + newb * norm(self.pylonB.axis)
-		slider3 = self.pylonC.pos + newc * norm(self.pylonC.axis)
+		# slider1 = self.pylonA.pos + newa * norm(self.pylonA.axis)
+		# slider2 = self.pylonB.pos + newb * norm(self.pylonB.axis)
+		# slider3 = self.pylonC.pos + newc * norm(self.pylonC.axis)
 
-		res = self.solve_sphere_intersect(slider1, slider2, slider3, self.arm['a'], self.arm['b'], self.arm['c'])
+		# res = geo.get_sphere_intersect(slider1, slider2, slider3, self.arm['a'], self.arm['b'], self.arm['c'])
+		res = geo.get_shpere_intersect(self.pos_to_vect('a',s['a']),self.pos_to_vect('b',s['b']),self.pos_to_vect('c',s['c']),self.armlen['a'],self.armlen['b'],self.armlen['c'])
 		
 		#if the move is actually valid, update the "official" slider positions
 		if (res is not False):
-			self.slider['a']=newa
-			self.slider['b']=newb
-			self.slider['c']=newc
+			self.endpoint.pos = res[0]
+
+			for axis in axes:
+				self.tpos[axis]=s[axis]
+				self.arm[axis].pos=self.pos_to_vect(axis,s[axis])
+				self.arm[axis].axis=res-self.arm[axis].pos
+
+			# self.slider['a']=newa
+			# self.slider['b']=newb
+			# self.slider['c']=newc
 
 			#update the endpoint
-			self.endpoint.pos = res
+			# self.endpoint.pos = res
 
-			#update the arms too!
-			self.armA.pos = slider1
-			self.armB.pos = slider2
-			self.armC.pos = slider3
+			# #update the arms too!
+			# self.armA.pos = slider1
+			# self.armB.pos = slider2
+			# self.armC.pos = slider3
 
-			self.armA.axis = res-slider1
-			self.armB.axis = res-slider2
-			self.armC.axis = res-slider3
+			# self.armA.axis = res-slider1
+			# self.armB.axis = res-slider2
+			# self.armC.axis = res-slider3
 
 		else:
 			print("the position you want to move to is not reachable.  holding still")
-			return False
 
-	#set the initial position of the sliders.  Possible to make an usafe setting!
-	def slider_set(self, a, b, c):
-		self.slider['a'] = a
-		self.slider['b'] = b
-		self.slider['c'] = c
+	#-----------------------------------UTILITY FUNCTIONS------------------------------------------
+	#these are utility functions for doing things like making the delta visible, changing the scene,
+	#and making the trail visible
 
-	def arm_len_set(self, a, b, c):
-		self.arm['a']=a
-		self.arm['b']=b
-		self.arm['c']=c
-
-	#get desired slider-on-pylon position for x y z coords
-	def rev_kinematic(self, R, r1, r2, r3):
-		#R, the desired point
-		s1 = self.solve_sphere_line_intersect(R,r1,self.pylonA.pos,self.pylonA.axis)
-		s2 = self.solve_sphere_line_intersect(R,r2,self.pylonB.pos,self.pylonB.axis)
-		s3 = self.solve_sphere_line_intersect(R,r3,self.pylonC.pos,self.pylonC.axis)
-
-		s1 = self.point_line_scalar(s1, self.pylonA.pos, self.pylonA.axis)
-		s2 = self.point_line_scalar(s2, self.pylonB.pos, self.pylonB.axis)
-		s3 = self.point_line_scalar(s3, self.pylonC.pos, self.pylonC.axis)
-
-
-		return [s1,s2,s3]
-
-	#find intersection of circle and a line.
-	#circle given in x,y,z,r
-	#line given in point-vector form (but not neccecarily unit vector)
-
-
-	#given a vector that is pointing at a point, a point on a line and the unit vector for the line,
-	#what value t for line(t)=linepoint+t*norm(lineaxis) gives you the intersection?
-	def point_line_scalar(self, point, linepoint, lineaxis):
-		ret=mag(point-linepoint)#/mag(norm(lineaxis))==1
-		return ret
-
-	def solve_sphere_line_intersect(this,R,r,P,pvec):
-		yhat=norm(pvec)
-		xhat=norm(cross(cross(R-P,pvec),pvec))
-
-		#line-point distance d
-		d   = dot(P-R,xhat)/mag(xhat)
-
-		#if d>r, there is no way the two intersect, and acos will return ValueError as range of acos is [1:-1]
-		if(d>r):
-			print("cannot solve for arm position")
-			return False
-
-		theta = acos(d/r)
-		#note,there is more than one solution.  I only return one because I assume the arms are going "down"
-		#this is the solution if you want a vector pointed at the place in space where the arm is
-		solution = R+ r*cos(theta)*xhat +r*sin(theta)*yhat
-
-		return solution
-
-	def endpoint_trail(self, state=True, col=color.orange):
+	def endpoint_trail(self, state=True, col = color.orange):
 		self.endpoint.make_trail = state
 		self.endpoint.trail_object.color=col
 
-	#you give plan_G0 B, as in from point A to B
-	#puts these points in self.plan_buf
-	def plan_G0(self,B):
-		A=self.endpoint.pos
-		Mhat=norm(A-B) #this is the motion vector
-
-		#largest_seg is the largest segment length that evenly divides the total distance that is smaller than self.seg
-		
-		largest_seg = mag(A-B)/ceil(mag(A-B)/self.seg)
-		print("seg len is %d" % (largest_seg))
-
-
-		for i in range(int((mag(A-B)/largest_seg)+1)):
-			self.plan_buf.append(A-i*largest_seg*Mhat)
-		return 1
-		
-	def xyz_to_abc(self):
-		for xyz in self.plan_buf:
-			print self.rev_kinematic(xyz,self.arm['a'],self.arm['b'],self.arm['c'])
-			self.motion_buf.append(self.rev_kinematic(xyz,self.arm['a'],self.arm['b'],self.arm['c']))
-		self.plan_buf=[] #forget what was in this buffer
-
-	def run_out_motion_buffer(self):
-		for pos in self.motion_buf:
-			rate(100)
-			self.update_slider(pos[0],pos[1],pos[2],'abs')
-		self.motion_buf=[]
-
-		#load a motion buffer into the machines motion buffer
-	def load_motion_buffer(self,buf):
-		self.motion_buf=buf
+		#TODO: move the scene to look at the delta- not sure the best way to do this yet.  hardcode for now
+	def focus_delta(self):
+		# scene.title="delta simulator 9000"
+		# scene.center=(0,0,600*.5)
+		# scene.forward=(-1,0,0)
+		# scene.up     =(0,0,1)
 		return True
 
-	def col_visible(self, state=True):
-		self.pylonA.visible=state
-		self.pylonB.visible=state
-		self.pylonC.visible=state
+	#TODO :need vpython ref to set all of the parts to invisible.
+	def visible(self, state):
+		pass
 
-myDelta = Delta(scene)
-badDelta = Delta(scene, pylonA_dir=vector(-10,0,600), pylonB_dir=vector(5,5,600))#pylonA_dir=vector(100,100,600))
+	#-----------------------------------SIMULATION FUNCTIONS------------------------------------------
+	#these are functions for doing things like making moving the delta, and making paths
+
+	
 
 
-myDelta.setup_delta()
-badDelta.setup_delta()
 
-myDelta.col_visible(False)
-badDelta.col_visible(False)
+abase= vector(100*cos(radians(0)),100*sin(radians(0)),0)
+bbase= vector(100*cos(radians(120)),100*sin(radians(120)),0)
+cbase= vector(100*cos(radians(240)),100*sin(radians(240)),0)
+adir = vector(0,0,300)
+bdir = vector(0,0,300)
+cdir = vector(0,0,300)
+apos = 200
+bpos = 200
+cpos = 200
+alen = 300
+blen = 300
+clen = 300
+radius = 100
 
-myDelta.arm_len_set(300, 300, 300)
-badDelta.arm_len_set(310, 290, 300)
 
-myDelta.update_slider(600,600,600,'abs')
-badDelta.update_slider(600,600,600,'abs')
+mydelta = Delta(scene, abase, bbase, cbase, adir, bdir, cdir, apos, bpos, cpos, alen, blen, clen, radius)
 
-myDelta.plan_G0(vector(50,50,0))
-myDelta.xyz_to_abc()
+	# def xyz_to_abc(self):
+	# 	for xyz in self.plan_buf:
+	# 		print self.rev_kinematic(xyz,self.arm['a'],self.arm['b'],self.arm['c'])
+	# 		self.motion_buf.append(self.rev_kinematic(xyz,self.arm['a'],self.arm['b'],self.arm['c']))
+	# 	self.plan_buf=[] #forget what was in this buffer
 
-badDelta.load_motion_buffer(myDelta.motion_buf)
+	# def run_out_motion_buffer(self):
+	# 	for pos in self.motion_buf:
+	# 		rate(100)
+	# 		self.update_slider(pos[0],pos[1],pos[2],'abs')
+	# 	self.motion_buf=[]
 
-myDelta.endpoint_trail()
-badDelta.endpoint_trail(col=color.green)
+	# 	#load a motion buffer into the machines motion buffer
+	# def load_motion_buffer(self,buf):
+	# 	self.motion_buf=buf
+	# 	return True
 
-myDelta.run_out_motion_buffer()
-badDelta.run_out_motion_buffer()
-
-# myDelta.plan_G0(vector(-50,-50,0))
-# myDelta.xyz_to_abc()
-# myDelta.run_out_motion_buffer()
-# myDelta.plan_G0(vector(-50,50,0))
-# myDelta.xyz_to_abc()
-
-# myDelta.endpoint_trail(True)
-
-# myDelta.run_out_motion_buffer()
-# myDelta.plan_G0(vector(50,50,0))
-# myDelta.xyz_to_abc()
-# myDelta.run_out_motion_buffer()
-# myDelta.plan_G0(vector(50,-50,0))
-# myDelta.xyz_to_abc()
-# myDelta.run_out_motion_buffer()
+	# def col_visible(self, state=True):
+	# 	self.pylonA.visible=state
+	# 	self.pylonB.visible=state
+	# 	self.pylonC.visible=state
