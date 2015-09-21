@@ -33,7 +33,7 @@ def get_sphere_intersect(P1, P2, P3, r1, r2, r3 ):
 
 #R is vector to center of sphere, r is radius of sphere
 #P is vector to line, pvec is a vector paralell to the line (ie line=P+t*norm(pvec))
-def solve_sphere_line_intersect(R,r,P,pvec):
+def get_sphere_line_intersect(R,r,P,pvec):
 	yhat=norm(pvec)
 	xhat=norm(cross(cross(R-P,pvec),pvec))
 
@@ -54,24 +54,24 @@ def solve_sphere_line_intersect(R,r,P,pvec):
 
 #takes a line in point-vector format line(t)=linepoint+t||lineaxis||
 #and a point on the line, point.  Returns t for that point 
-def get_line_scalar(self, point, linepoint, lineaxis):
+def get_line_scalar(point, linepoint, lineaxis):
 		ret=mag(point-linepoint)#/mag(norm(lineaxis))==1
-		
+		return ret
 		#check to make sure the point is on the line
-		if linepoint+ret*norm(lineaxis) == point:
-			return ret
-		else:
-			print ("get_line_scalar says: point not on line!")
-			return False
+		# if linepoint+ret*norm(lineaxis) == point:
+		# 	return ret
+		# else:
+		# 	print ("get_line_scalar says: point not on line!")
+		# 	return False
 
 #takes two vectors A and B, and scalar seg.  segment length of interpolated coords to be < seg
 #returns a list of vectors pointing at the xyz coords 
-def plan_G0(self,A,B,seg):
+def plan_G0(A,B,seg):
 		ret=[]
 		Mhat=norm(A-B) #this is the normal vector from A to B
 
 		#largest_seg is the largest segment length that evenly divides the total distance that is smaller than self.seg
-		largest_seg = mag(A-B)/ceil(mag(A-B)/self.seg)
+		largest_seg = mag(A-B)/ceil(mag(A-B)/seg)
 
 		#return points along the line A+i*Mhat, starting at A ending at B
 		
