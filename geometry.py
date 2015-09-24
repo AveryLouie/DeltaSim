@@ -55,27 +55,56 @@ def get_sphere_line_intersect(R,r,P,pvec):
 #takes a line in point-vector format line(t)=linepoint+t||lineaxis||
 #and a point on the line, point.  Returns t for that point 
 def get_line_scalar(point, linepoint, lineaxis):
-		ret=mag(point-linepoint)#/mag(norm(lineaxis))==1
-		return ret
-		#check to make sure the point is on the line
-		# if linepoint+ret*norm(lineaxis) == point:
-		# 	return ret
-		# else:
-		# 	print ("get_line_scalar says: point not on line!")
-		# 	return False
+	ret=mag(point-linepoint)#/mag(norm(lineaxis))==1
+	return ret
 
 #takes two vectors A and B, and scalar seg.  segment length of interpolated coords to be < seg
 #returns a list of vectors pointing at the xyz coords 
 def plan_G0(A,B,seg):
-		ret=[]
-		Mhat=norm(A-B) #this is the normal vector from A to B
-
-		#largest_seg is the largest segment length that evenly divides the total distance that is smaller than self.seg
-		largest_seg = mag(A-B)/ceil(mag(A-B)/seg)
-
-		#return points along the line A+i*Mhat, starting at A ending at B
-		
-		for i in range(int((mag(A-B)/largest_seg)+1)):
-			ret.append(A-i*largest_seg*Mhat)
-		
+	ret=[]
+	
+	if A==B:
+		ret.append(A)
 		return ret
+
+	Mhat=norm(A-B) #this is the normal vector from A to B
+
+	#largest_seg is the largest segment length that evenly divides the total distance that is smaller than self.seg
+	largest_seg = mag(A-B)/ceil(mag(A-B)/seg)
+
+	#return points along the line A+i*Mhat, starting at A ending at B
+	
+	for i in range(int((mag(A-B)/largest_seg)+1)):
+		ret.append(A-i*largest_seg*Mhat)
+	
+	return ret
+
+def plan_G2(A,B,C,r,seg):
+	pass
+
+#takes G code and turns it into a list of vectors to interpolate through
+def import_G_code(filename):
+	gcode = open(filename,'rb')
+	print('file opened')
+	ret = []
+	x=0
+	y=0
+	z=0
+	#NB: never re-zero these values because lines like G1 X33 Y44 exist- they assume you are on the same z level that you were on.
+	for line in gcode:
+		#if it is a G1 move
+		if 'G1' in line and ('X' in line or 'Y' in line or 'Z' in line) and line[0]!=';':
+			data=line.split()
+			# print line
+			for thing in data:
+				if thing[0]=='X':
+					x=float(thing[1:])
+				elif thing[0]=='Y':
+					y=float(thing[1:])
+				elif thing[0]=='Z':
+					z=float(thing[1:])
+			ret.append(['G1',vector(x,y,z)])
+
+	gcode.close()
+	print('file closed')
+	return ret
